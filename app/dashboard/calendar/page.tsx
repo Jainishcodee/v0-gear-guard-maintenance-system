@@ -10,9 +10,9 @@ export default async function CalendarPage() {
     .select(
       `
       *,
-      equipment:equipment_id(name),
-      requested_by:profiles!maintenance_requests_requested_by_fkey(full_name),
-      assigned_to:profiles!maintenance_requests_assigned_to_fkey(full_name)
+      equipment:equipment_id(equipment_name),
+      created_by:profiles!maintenance_requests_created_by_id_fkey(full_name),
+      assigned_technician:profiles!maintenance_requests_assigned_technician_id_fkey(full_name)
     `,
     )
     .not("scheduled_date", "is", null)

@@ -7,35 +7,32 @@ import { CheckCircle2, Clock, AlertCircle, Wrench } from "lucide-react"
 export default async function ReportingPage() {
   const supabase = await createClient()
 
-  // Fetch all maintenance requests with related data
   const { data: requests } = await supabase
     .from("maintenance_requests")
     .select(`
       *,
-      equipment:equipment_id(name, category),
-      assigned_technician:profiles!maintenance_requests_assigned_to_fkey(full_name),
-      requested_by_user:profiles!maintenance_requests_requested_by_fkey(full_name),
-      assigned_team_data:teams(name)
+      equipment:equipment_id(equipment_name, category),
+      assigned_technician:profiles!maintenance_requests_assigned_technician_id_fkey(full_name),
+      requested_by_user:profiles!maintenance_requests_created_by_id_fkey(full_name),
+      assigned_team_data:maintenance_teams(name)
     `)
     .order("created_at", { ascending: false })
 
-  // Calculate statistics
   const stats = {
     total: requests?.length || 0,
-    open: requests?.filter((r) => r.status === "open").length || 0,
-    inProgress: requests?.filter((r) => r.status === "in_progress").length || 0,
-    completed: requests?.filter((r) => r.status === "completed").length || 0,
-    cancelled: requests?.filter((r) => r.status === "cancelled").length || 0,
+    open: requests?.filter((r) => r.stage === "open").length || 0,
+    inProgress: requests?.filter((r) => r.stage === "in_progress").length || 0,
+    completed: requests?.filter((r) => r.stage === "completed").length || 0,
+    cancelled: requests?.filter((r) => r.stage === "cancelled").length || 0,
   }
 
   const completionRate = stats.total > 0 ? ((stats.completed / stats.total) * 100).toFixed(1) : 0
 
-  // Calculate average hours - using estimated_hours field
-  const completedRequests = requests?.filter((r) => r.status === "completed" && r.estimated_hours) || []
+  const completedRequests = requests?.filter((r) => r.stage === "completed" && r.duration_hours) || []
   const avgHours =
     completedRequests.length > 0
       ? (
-          completedRequests.reduce((sum, r) => sum + (Number(r.estimated_hours) || 0), 0) / completedRequests.length
+          completedRequests.reduce((sum, r) => sum + (Number(r.duration_hours) || 0), 0) / completedRequests.length
         ).toFixed(1)
       : 0
 
@@ -141,13 +138,13 @@ export default async function ReportingPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Title</TableHead>
+                <TableHead>Subject</TableHead>
                 <TableHead>Equipment</TableHead>
                 <TableHead>Requested By</TableHead>
                 <TableHead>Assigned To</TableHead>
                 <TableHead>Priority</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Est. Hours</TableHead>
+                <TableHead>Stage</TableHead>
+                <TableHead>Duration (hrs)</TableHead>
                 <TableHead>Date</TableHead>
               </TableRow>
             </TableHeader>
@@ -155,8 +152,8 @@ export default async function ReportingPage() {
               {requests && requests.length > 0 ? (
                 requests.map((request) => (
                   <TableRow key={request.id}>
-                    <TableCell className="font-medium">{request.title}</TableCell>
-                    <TableCell>{request.equipment?.name || "N/A"}</TableCell>
+                    <TableCell className="font-medium">{request.subject}</TableCell>
+                    <TableCell>{request.equipment?.equipment_name || "N/A"}</TableCell>
                     <TableCell>{request.requested_by_user?.full_name || "Unknown"}</TableCell>
                     <TableCell>
                       {request.assigned_technician?.full_name || request.assigned_team_data?.name || "Unassigned"}
@@ -177,18 +174,18 @@ export default async function ReportingPage() {
                     <TableCell>
                       <Badge
                         className={
-                          request.status === "completed"
+                          request.stage === "completed"
                             ? "bg-green-600"
-                            : request.status === "in_progress"
+                            : request.stage === "in_progress"
                               ? "bg-blue-600"
                               : ""
                         }
-                        variant={request.status === "open" ? "secondary" : "default"}
+                        variant={request.stage === "open" ? "secondary" : "default"}
                       >
-                        {request.status.replace("_", " ")}
+                        {request.stage.replace("_", " ")}
                       </Badge>
                     </TableCell>
-                    <TableCell>{request.estimated_hours ? `${request.estimated_hours}h` : "N/A"}</TableCell>
+                    <TableCell>{request.duration_hours ? `${request.duration_hours}h` : "N/A"}</TableCell>
                     <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
                   </TableRow>
                 ))

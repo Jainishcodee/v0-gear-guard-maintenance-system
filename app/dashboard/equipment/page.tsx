@@ -15,10 +15,10 @@ export default async function EquipmentPage({
   const supabase = await createClient()
 
   // Build query
-  let query = supabase.from("equipment").select("*, created_by:profiles!equipment_created_by_fkey(full_name)")
+  let query = supabase.from("equipment").select("*")
 
   if (searchParams.search) {
-    query = query.or(`name.ilike.%${searchParams.search}%,description.ilike.%${searchParams.search}%`)
+    query = query.or(`equipment_name.ilike.%${searchParams.search}%,category.ilike.%${searchParams.search}%`)
   }
 
   if (searchParams.status) {
@@ -112,8 +112,8 @@ export default async function EquipmentPage({
                   <div className="space-y-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h3 className="font-semibold leading-none">{item.name}</h3>
-                        <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{item.description}</p>
+                        <h3 className="font-semibold leading-none">{item.equipment_name}</h3>
+                        <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{item.category}</p>
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -123,7 +123,7 @@ export default async function EquipmentPage({
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Location</span>
-                        <span className="font-medium">{item.location}</span>
+                        <span className="font-medium">{item.physical_location || "N/A"}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Status</span>
