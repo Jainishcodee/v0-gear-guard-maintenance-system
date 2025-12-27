@@ -14,9 +14,9 @@ export default async function DashboardPage() {
       .select(`
       *,
       equipment:equipment_id(equipment_name),
-      assigned_technician:assigned_technician_id(full_name),
-      created_by:created_by_id(full_name),
-      maintenance_team:maintenance_team_id(name)
+      assigned_technician:profiles!maintenance_requests_assigned_technician_id_fkey(full_name),
+      created_by:profiles!maintenance_requests_created_by_id_fkey(full_name),
+      maintenance_team:maintenance_teams(name)
     `)
       .order("created_at", { ascending: false })
       .limit(10),
