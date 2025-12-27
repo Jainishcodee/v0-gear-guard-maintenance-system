@@ -36,7 +36,6 @@ export function TopNav({ user }: TopNavProps) {
 
   const navItems = [
     { label: "Dashboard", href: "/dashboard" },
-    { label: "Maintenance", href: "/dashboard/maintenance" },
     { label: "Maintenance Calendar", href: "/dashboard/calendar" },
     { label: "Equipment", href: "/dashboard/equipment" },
     { label: "Reporting", href: "/dashboard/reporting" },
