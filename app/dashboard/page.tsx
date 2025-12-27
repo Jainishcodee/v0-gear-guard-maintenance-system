@@ -13,10 +13,10 @@ export default async function DashboardPage() {
       .from("maintenance_requests")
       .select(`
       *,
-      equipment:equipment_id(name),
-      assigned_technician:profiles!maintenance_requests_assigned_to_fkey(full_name),
-      requested_by_profile:profiles!maintenance_requests_requested_by_fkey(full_name),
-      assigned_team_info:teams!maintenance_requests_assigned_team_fkey(name)
+      equipment:equipment_id(equipment_name),
+      assigned_technician:profiles!maintenance_requests_assigned_technician_id_fkey(full_name),
+      created_by:profiles!maintenance_requests_created_by_id_fkey(full_name),
+      maintenance_team:maintenance_teams!maintenance_requests_maintenance_team_id_fkey(name)
     `)
       .order("created_at", { ascending: false })
       .limit(10),
@@ -32,23 +32,22 @@ export default async function DashboardPage() {
   const totalHoursScheduled = requests?.reduce((sum, r) => sum + (r.estimated_hours || 0), 0) || 0
   const technicianUtilization = Math.min(Math.round((totalHoursScheduled / (totalTechnicians * 8)) * 100), 100)
 
-  // Open Requests (pending + in progress) and overdue
-  const openRequests = requests?.filter((r) => r.status === "pending" || r.status === "in_progress").length || 0
+  const openRequests = requests?.filter((r) => r.stage === "new" || r.stage === "in_progress").length || 0
   const overdueRequests =
     requests?.filter((r) => {
       if (!r.scheduled_date) return false
-      return new Date(r.scheduled_date) < new Date() && r.status !== "completed"
+      return new Date(r.scheduled_date) < new Date() && r.stage !== "completed"
     }).length || 0
 
   const statusColors = {
-    pending: "bg-blue-100 text-blue-800 border-blue-200",
+    new: "bg-blue-100 text-blue-800 border-blue-200",
     in_progress: "bg-yellow-100 text-yellow-800 border-yellow-200",
     completed: "bg-green-100 text-green-800 border-green-200",
     cancelled: "bg-gray-100 text-gray-800 border-gray-200",
   }
 
   const statusLabels = {
-    pending: "Pending",
+    new: "New",
     in_progress: "In Progress",
     completed: "Completed",
     cancelled: "Cancelled",
@@ -98,7 +97,7 @@ export default async function DashboardPage() {
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Employee</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Technician</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Priority</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Stage</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Equipment</th>
             </tr>
           </thead>
@@ -108,15 +107,15 @@ export default async function DashboardPage() {
                 <tr key={request.id} className="cursor-pointer hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm">
                     <Link href={`/dashboard/requests/${request.id}`} className="hover:underline">
-                      {request.title}
+                      {request.subject}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-sm">{request.requested_by_profile?.full_name || "—"}</td>
+                  <td className="px-4 py-3 text-sm">{request.created_by?.full_name || "—"}</td>
                   <td className="px-4 py-3 text-sm">{request.assigned_technician?.full_name || "Unassigned"}</td>
                   <td className="px-4 py-3 text-sm">
                     <span
                       className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                        request.priority === "high"
+                        request.priority === "critical" || request.priority === "high"
                           ? "bg-red-100 text-red-700"
                           : request.priority === "medium"
                             ? "bg-yellow-100 text-yellow-700"
@@ -127,11 +126,11 @@ export default async function DashboardPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant="outline" className={statusColors[request.status as keyof typeof statusColors]}>
-                      {statusLabels[request.status as keyof typeof statusLabels] || request.status}
+                    <Badge variant="outline" className={statusColors[request.stage as keyof typeof statusColors]}>
+                      {statusLabels[request.stage as keyof typeof statusLabels] || request.stage}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-sm">{request.equipment?.name || "—"}</td>
+                  <td className="px-4 py-3 text-sm">{request.equipment?.equipment_name || "—"}</td>
                 </tr>
               ))
             ) : (

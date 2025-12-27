@@ -16,11 +16,14 @@ export default async function NewRequestPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Fetch equipment for dropdown - using 'name' column instead of 'equipment_name'
-  const { data: equipment } = await supabase.from("equipment").select("id, name, category").order("name")
+  // Fetch equipment for dropdown - using 'equipment_name' column instead of 'name'
+  const { data: equipment } = await supabase
+    .from("equipment")
+    .select("id, equipment_name, category")
+    .order("equipment_name")
 
-  // Fetch teams for assignment - using 'teams' table instead of 'maintenance_teams'
-  const { data: teams } = await supabase.from("teams").select("id, name").order("name")
+  // Fetch teams for assignment - using 'maintenance_teams' table instead of 'teams'
+  const { data: teams } = await supabase.from("maintenance_teams").select("id, name").order("name")
 
   // Fetch users for assignment
   const { data: users } = await supabase.from("profiles").select("id, full_name").order("full_name")
@@ -40,17 +43,19 @@ export default async function NewRequestPage() {
     const assignedTeam = formData.get("maintenance_team_id") as string
 
     const requestData = {
-      title: formData.get("subject") as string,
+      subject: formData.get("subject") as string,
       description: formData.get("description") as string,
       equipment_id: equipmentId === "none" ? null : equipmentId,
       priority: formData.get("priority") as string,
-      status: "new",
-      requested_by: user.id,
-      assigned_to: assignedTo === "none" ? null : assignedTo,
-      assigned_team: assignedTeam === "none" ? null : assignedTeam,
+      stage: "new",
+      request_type: formData.get("request_type") as string,
+      created_by_id: user.id,
+      assigned_technician_id: assignedTo === "none" ? null : assignedTo,
+      maintenance_team_id: assignedTeam === "none" ? null : assignedTeam,
       scheduled_date: (formData.get("scheduled_date") as string) || null,
-      estimated_hours: Number.parseFloat(formData.get("duration_hours") as string) || null,
-      notes: (formData.get("notes") as string) || null,
+      duration_hours: Number.parseFloat(formData.get("duration_hours") as string) || null,
+      category: formData.get("category") as string,
+      company: formData.get("company") as string,
     }
 
     const { error } = await supabase.from("maintenance_requests").insert(requestData)
@@ -97,18 +102,31 @@ export default async function NewRequestPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category">Category *</Label>
-                <Select name="category" defaultValue="Corrective">
-                  <SelectTrigger id="category">
+                <Label htmlFor="request_type">Request Type *</Label>
+                <Select name="request_type" defaultValue="corrective">
+                  <SelectTrigger id="request_type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Corrective">Corrective</SelectItem>
-                    <SelectItem value="Preventive">Preventive</SelectItem>
-                    <SelectItem value="Predictive">Predictive</SelectItem>
+                    <SelectItem value="corrective">Corrective</SelectItem>
+                    <SelectItem value="preventive">Preventive</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category">Category *</Label>
+              <Select name="category" defaultValue="Corrective">
+                <SelectTrigger id="category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Corrective">Corrective</SelectItem>
+                  <SelectItem value="Preventive">Preventive</SelectItem>
+                  <SelectItem value="Predictive">Predictive</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -121,7 +139,7 @@ export default async function NewRequestPage() {
                   <SelectItem value="none">No equipment</SelectItem>
                   {equipment?.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
-                      {item.name} ({item.category})
+                      {item.equipment_name} ({item.category})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -130,15 +148,15 @@ export default async function NewRequestPage() {
 
             <div className="space-y-2">
               <Label htmlFor="priority">Priority *</Label>
-              <Select name="priority" defaultValue="Medium">
+              <Select name="priority" defaultValue="medium">
                 <SelectTrigger id="priority">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Low">Low</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="High">High</SelectItem>
-                  <SelectItem value="Critical">Critical</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -186,14 +204,9 @@ export default async function NewRequestPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="duration_hours">Duration (Hours)</Label>
+                <Label htmlFor="duration_hours">Estimated Hours</Label>
                 <Input id="duration_hours" name="duration_hours" type="number" step="0.5" placeholder="e.g., 2.5" />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" name="notes" placeholder="Additional notes..." rows={2} />
             </div>
 
             <div className="flex gap-4 pt-4">

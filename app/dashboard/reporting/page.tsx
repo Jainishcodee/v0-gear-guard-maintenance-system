@@ -22,7 +22,7 @@ export default async function ReportingPage() {
   // Calculate statistics
   const stats = {
     total: requests?.length || 0,
-    new: requests?.filter((r) => r.status === "new").length || 0,
+    open: requests?.filter((r) => r.status === "open").length || 0,
     inProgress: requests?.filter((r) => r.status === "in_progress").length || 0,
     completed: requests?.filter((r) => r.status === "completed").length || 0,
     cancelled: requests?.filter((r) => r.status === "cancelled").length || 0,
@@ -30,12 +30,12 @@ export default async function ReportingPage() {
 
   const completionRate = stats.total > 0 ? ((stats.completed / stats.total) * 100).toFixed(1) : 0
 
-  // Calculate average hours
-  const completedRequests = requests?.filter((r) => r.status === "completed" && r.actual_hours) || []
+  // Calculate average hours - using estimated_hours field
+  const completedRequests = requests?.filter((r) => r.status === "completed" && r.estimated_hours) || []
   const avgHours =
     completedRequests.length > 0
       ? (
-          completedRequests.reduce((sum, r) => sum + (Number(r.actual_hours) || 0), 0) / completedRequests.length
+          completedRequests.reduce((sum, r) => sum + (Number(r.estimated_hours) || 0), 0) / completedRequests.length
         ).toFixed(1)
       : 0
 
@@ -102,10 +102,10 @@ export default async function ReportingPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Badge variant="secondary">New</Badge>
+                <Badge variant="secondary">Open</Badge>
                 <span className="text-sm text-muted-foreground">New requests</span>
               </div>
-              <span className="font-semibold">{stats.new}</span>
+              <span className="font-semibold">{stats.open}</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -148,7 +148,6 @@ export default async function ReportingPage() {
                 <TableHead>Priority</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Est. Hours</TableHead>
-                <TableHead>Actual Hours</TableHead>
                 <TableHead>Date</TableHead>
               </TableRow>
             </TableHeader>
@@ -165,9 +164,9 @@ export default async function ReportingPage() {
                     <TableCell>
                       <Badge
                         variant={
-                          request.priority === "Critical"
+                          request.priority === "critical"
                             ? "destructive"
-                            : request.priority === "High"
+                            : request.priority === "high"
                               ? "default"
                               : "secondary"
                         }
@@ -184,19 +183,18 @@ export default async function ReportingPage() {
                               ? "bg-blue-600"
                               : ""
                         }
-                        variant={request.status === "new" ? "secondary" : "default"}
+                        variant={request.status === "open" ? "secondary" : "default"}
                       >
                         {request.status.replace("_", " ")}
                       </Badge>
                     </TableCell>
                     <TableCell>{request.estimated_hours ? `${request.estimated_hours}h` : "N/A"}</TableCell>
-                    <TableCell>{request.actual_hours ? `${request.actual_hours}h` : "N/A"}</TableCell>
                     <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
                     No maintenance requests found
                   </TableCell>
                 </TableRow>
