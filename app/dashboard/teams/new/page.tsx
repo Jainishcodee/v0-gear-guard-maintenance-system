@@ -9,6 +9,10 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 export default async function NewTeamPage() {
+  const supabase = await createClient()
+
+  const { data: users } = await supabase.from("profiles").select("id, full_name, email").order("full_name")
+
   async function createTeam(formData: FormData) {
     "use server"
 
@@ -19,9 +23,17 @@ export default async function NewTeamPage() {
       description: formData.get("description") as string,
     }
 
-    const { error } = await supabase.from("teams").insert(teamData)
+    const { data: team, error } = await supabase.from("teams").insert(teamData).select().single()
 
-    if (!error) {
+    if (!error && team) {
+      const memberIds = formData.getAll("team_members")
+      if (memberIds.length > 0) {
+        const teamMembers = memberIds.map((userId) => ({
+          team_id: team.id,
+          user_id: userId as string,
+        }))
+        await supabase.from("team_members").insert(teamMembers)
+      }
       redirect("/dashboard/teams")
     }
   }
@@ -49,6 +61,21 @@ export default async function NewTeamPage() {
             <div className="space-y-2">
               <Label htmlFor="name">Team Name *</Label>
               <Input id="name" name="name" required placeholder="e.g., HVAC Team" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="team_members">Team Members</Label>
+              <div className="space-y-2 rounded-lg border p-3 max-h-48 overflow-y-auto">
+                {users?.map((user) => (
+                  <label key={user.id} className="flex items-center gap-2 cursor-pointer hover:bg-accent p-2 rounded">
+                    <input type="checkbox" name="team_members" value={user.id} className="h-4 w-4" />
+                    <span className="text-sm">
+                      {user.full_name} <span className="text-muted-foreground">({user.email})</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">Select technicians to add to this team</p>
             </div>
 
             <div className="space-y-2">

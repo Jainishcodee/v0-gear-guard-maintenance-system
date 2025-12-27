@@ -20,10 +20,10 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     .select(
       `
       *,
-      equipment:equipment_id(id, name, category),
-      requested_by:profiles!maintenance_requests_requested_by_fkey(full_name, email),
-      assigned_to:profiles!maintenance_requests_assigned_to_fkey(id, full_name, email),
-      assigned_team:teams(name)
+      equipment:equipment_id(id, equipment_name, category),
+      created_by:profiles!maintenance_requests_created_by_id_fkey(full_name, email),
+      assigned_technician:profiles!maintenance_requests_assigned_technician_id_fkey(id, full_name, email),
+      maintenance_team:maintenance_teams!maintenance_requests_maintenance_team_id_fkey(name)
     `,
     )
     .eq("id", params.id)
@@ -33,10 +33,9 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     notFound()
   }
 
-  // Fetch comments
   const { data: comments } = await supabase
-    .from("comments")
-    .select("*, user:profiles!comments_user_id_fkey(full_name)")
+    .from("maintenance_comments")
+    .select("*, user:profiles!maintenance_comments_user_id_fkey(full_name)")
     .eq("request_id", params.id)
     .order("created_at", { ascending: true })
 
@@ -50,12 +49,12 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
 
     if (!user) return
 
-    const content = formData.get("content") as string
+    const comment = formData.get("content") as string
 
-    await supabase.from("comments").insert({
+    await supabase.from("maintenance_comments").insert({
       request_id: params.id,
       user_id: user.id,
-      content,
+      comment,
     })
 
     redirect(`/dashboard/requests/${params.id}`)
@@ -65,11 +64,11 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     "use server"
 
     const supabase = await createClient()
-    const status = formData.get("status") as string
+    const stage = formData.get("stage") as string
 
-    const updateData: any = { status }
+    const updateData: any = { stage }
 
-    if (status === "completed") {
+    if (stage === "completed") {
       updateData.completed_date = new Date().toISOString()
     }
 
@@ -85,7 +84,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     critical: "bg-red-100 text-red-800",
   }
 
-  const statusColors = {
+  const stageColors = {
     pending: "bg-yellow-100 text-yellow-800",
     "in-progress": "bg-blue-100 text-blue-800",
     completed: "bg-green-100 text-green-800",
@@ -103,13 +102,13 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
             </Link>
           </Button>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{request.title}</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{request.subject}</h1>
             <div className="flex gap-2 mt-2">
               <Badge variant="outline" className={priorityColors[request.priority as keyof typeof priorityColors]}>
                 {request.priority} priority
               </Badge>
-              <Badge variant="outline" className={statusColors[request.status as keyof typeof statusColors]}>
-                {request.status}
+              <Badge variant="outline" className={stageColors[request.stage as keyof typeof stageColors]}>
+                {request.stage}
               </Badge>
             </div>
           </div>
@@ -159,7 +158,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
                             {new Date(comment.created_at).toLocaleString()}
                           </span>
                         </div>
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{comment.content}</p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{comment.comment}</p>
                       </div>
                     </div>
                   ))
@@ -186,7 +185,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
             </CardHeader>
             <CardContent>
               <form action={updateStatus} className="space-y-3">
-                <Select name="status" defaultValue={request.status}>
+                <Select name="stage" defaultValue={request.stage}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -217,27 +216,27 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
                     href={`/dashboard/equipment/${request.equipment.id}`}
                     className="text-sm text-primary hover:underline"
                   >
-                    {request.equipment.name}
+                    {request.equipment.equipment_name}
                   </Link>
                 </div>
               )}
 
               <div className="space-y-1">
                 <div className="text-sm font-medium">Requested By</div>
-                <div className="text-sm text-muted-foreground">{request.requested_by?.full_name}</div>
+                <div className="text-sm text-muted-foreground">{request.created_by?.full_name}</div>
               </div>
 
-              {request.assigned_to && (
+              {request.assigned_technician && (
                 <div className="space-y-1">
                   <div className="text-sm font-medium">Assigned To</div>
-                  <div className="text-sm text-muted-foreground">{request.assigned_to.full_name}</div>
+                  <div className="text-sm text-muted-foreground">{request.assigned_technician.full_name}</div>
                 </div>
               )}
 
-              {request.assigned_team && (
+              {request.maintenance_team && (
                 <div className="space-y-1">
                   <div className="text-sm font-medium">Assigned Team</div>
-                  <div className="text-sm text-muted-foreground">{request.assigned_team.name}</div>
+                  <div className="text-sm text-muted-foreground">{request.maintenance_team.name}</div>
                 </div>
               )}
 
@@ -253,13 +252,13 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
                 </div>
               )}
 
-              {request.estimated_hours && (
+              {request.duration_hours && (
                 <div className="space-y-1">
                   <div className="text-sm font-medium flex items-center gap-2">
                     <Clock className="h-4 w-4" />
                     Estimated Hours
                   </div>
-                  <div className="text-sm text-muted-foreground">{request.estimated_hours} hours</div>
+                  <div className="text-sm text-muted-foreground">{request.duration_hours} hours</div>
                 </div>
               )}
 

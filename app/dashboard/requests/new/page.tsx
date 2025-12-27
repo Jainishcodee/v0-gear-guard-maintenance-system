@@ -1,5 +1,8 @@
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
+"use client"
+
+import type React from "react"
+
+import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -8,44 +11,61 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 
-export default async function NewRequestPage() {
-  const supabase = await createClient()
+export default function NewRequestPage() {
+  const router = useRouter()
+  const supabase = createClient()
+  const [user, setUser] = useState<any>(null)
+  const [equipment, setEquipment] = useState<any[]>([])
+  const [workCenters, setWorkCenters] = useState<any[]>([])
+  const [teams, setTeams] = useState<any[]>([])
+  const [users, setUsers] = useState<any[]>([])
+  const [maintenanceFor, setMaintenanceFor] = useState("equipment")
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  useEffect(() => {
+    const fetchData = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      setUser(user)
 
-  // Fetch equipment for dropdown - using 'equipment_name' column instead of 'name'
-  const { data: equipment } = await supabase
-    .from("equipment")
-    .select("id, equipment_name, category")
-    .order("equipment_name")
+      const { data: equipmentData } = await supabase
+        .from("equipment")
+        .select("id, equipment_name, category")
+        .order("equipment_name")
+      setEquipment(equipmentData || [])
 
-  // Fetch teams for assignment - using 'maintenance_teams' table instead of 'teams'
-  const { data: teams } = await supabase.from("maintenance_teams").select("id, name").order("name")
+      const { data: workCentersData } = await supabase
+        .from("work_centers")
+        .select("id, work_center_name, code")
+        .order("work_center_name")
+      setWorkCenters(workCentersData || [])
 
-  // Fetch users for assignment
-  const { data: users } = await supabase.from("profiles").select("id, full_name").order("full_name")
+      const { data: teamsData } = await supabase.from("maintenance_teams").select("id, name").order("name")
+      setTeams(teamsData || [])
+
+      const { data: usersData } = await supabase.from("profiles").select("id, full_name").order("full_name")
+      setUsers(usersData || [])
+    }
+    fetchData()
+  }, [])
 
   async function createRequest(formData: FormData) {
-    "use server"
-
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
     if (!user) return
 
     const equipmentId = formData.get("equipment_id") as string
+    const workCenterId = formData.get("work_center_id") as string
     const assignedTo = formData.get("assigned_technician_id") as string
     const assignedTeam = formData.get("maintenance_team_id") as string
 
     const requestData = {
       subject: formData.get("subject") as string,
       description: formData.get("description") as string,
-      equipment_id: equipmentId === "none" ? null : equipmentId,
+      maintenance_for: formData.get("maintenance_for") as string,
+      equipment_id: maintenanceFor === "equipment" && equipmentId !== "none" ? equipmentId : null,
+      work_center_id: maintenanceFor === "work_center" && workCenterId !== "none" ? workCenterId : null,
       priority: formData.get("priority") as string,
       stage: "new",
       request_type: formData.get("request_type") as string,
@@ -61,8 +81,14 @@ export default async function NewRequestPage() {
     const { error } = await supabase.from("maintenance_requests").insert(requestData)
 
     if (!error) {
-      redirect("/dashboard")
+      router.push("/dashboard")
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    await createRequest(formData)
   }
 
   return (
@@ -84,7 +110,7 @@ export default async function NewRequestPage() {
           <CardTitle>Request Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={createRequest} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="subject">Subject *</Label>
               <Input id="subject" name="subject" required placeholder="Brief description of the issue" />
@@ -130,21 +156,60 @@ export default async function NewRequestPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="equipment_id">Equipment</Label>
-              <Select name="equipment_id" defaultValue="none">
-                <SelectTrigger id="equipment_id">
-                  <SelectValue placeholder="Select equipment" />
+              <Label htmlFor="maintenance_for">Maintenance For *</Label>
+              <Select
+                name="maintenance_for"
+                value={maintenanceFor}
+                onValueChange={setMaintenanceFor}
+                defaultValue="equipment"
+              >
+                <SelectTrigger id="maintenance_for">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No equipment</SelectItem>
-                  {equipment?.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.equipment_name} ({item.category})
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="equipment">Equipment</SelectItem>
+                  <SelectItem value="work_center">Work Center</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {maintenanceFor === "equipment" && (
+              <div className="space-y-2">
+                <Label htmlFor="equipment_id">Equipment</Label>
+                <Select name="equipment_id" defaultValue="none">
+                  <SelectTrigger id="equipment_id">
+                    <SelectValue placeholder="Select equipment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No equipment</SelectItem>
+                    {equipment?.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.equipment_name} ({item.category})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {maintenanceFor === "work_center" && (
+              <div className="space-y-2">
+                <Label htmlFor="work_center_id">Work Center</Label>
+                <Select name="work_center_id" defaultValue="none">
+                  <SelectTrigger id="work_center_id">
+                    <SelectValue placeholder="Select work center" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No work center</SelectItem>
+                    {workCenters?.map((wc) => (
+                      <SelectItem key={wc.id} value={wc.id}>
+                        {wc.work_center_name} {wc.code && `(${wc.code})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="priority">Priority *</Label>

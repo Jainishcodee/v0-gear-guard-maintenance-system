@@ -38,6 +38,7 @@ export function TopNav({ user }: TopNavProps) {
     { label: "Dashboard", href: "/dashboard" },
     { label: "Maintenance Calendar", href: "/dashboard/calendar" },
     { label: "Equipment", href: "/dashboard/equipment" },
+    { label: "Work Centers", href: "/dashboard/work-centers" },
     { label: "Reporting", href: "/dashboard/reporting" },
     { label: "Teams", href: "/dashboard/teams" },
   ]

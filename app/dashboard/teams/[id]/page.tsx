@@ -21,7 +21,7 @@ export default async function TeamDetailPage({ params }: { params: { id: string 
     .from("team_members")
     .select("*, user:profiles!team_members_user_id_fkey(id, full_name, email, role)")
     .eq("team_id", params.id)
-    .order("joined_at", { ascending: false })
+    .order("created_at", { ascending: false })
 
   // Fetch all users for adding members
   const { data: allUsers } = await supabase.from("profiles").select("id, full_name, email, role").order("full_name")
