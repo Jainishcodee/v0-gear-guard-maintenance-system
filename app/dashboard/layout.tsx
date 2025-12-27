@@ -1,5 +1,5 @@
 import type React from "react"
-import { DashboardNav } from "@/components/dashboard-nav"
+import { TopNav } from "@/components/top-nav"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 
@@ -18,17 +18,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
 
   return (
-    <div className="min-h-screen bg-background">
-      <DashboardNav
+    <div className="min-h-screen bg-white">
+      <TopNav
         user={{
           email: user.email,
           full_name: profile?.full_name,
           role: profile?.role,
         }}
       />
-      <div className="lg:pl-64">
-        <main className="p-6 lg:p-8">{children}</main>
-      </div>
+      <main className="p-6">{children}</main>
     </div>
   )
 }

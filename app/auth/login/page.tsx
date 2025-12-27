@@ -39,9 +39,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center p-6">
+    <div className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100 p-6">
       <div className="w-full max-w-sm">
-        <Card>
+        <Card className="border-2 shadow-lg">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold">GearGuard</CardTitle>
             <CardDescription>Sign in to your maintenance dashboard</CardDescription>

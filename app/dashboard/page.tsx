@@ -1,197 +1,131 @@
 import { createClient } from "@/lib/supabase/server"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Wrench, ClipboardList, AlertTriangle, CheckCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import Link from "next/link"
+import { Plus } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
 
-  // Fetch statistics
-  const [equipmentCount, requestsCount, pendingCount, completedCount, teamsCount] = await Promise.all([
-    supabase.from("equipment").select("*", { count: "exact", head: true }),
-    supabase.from("maintenance_requests").select("*", { count: "exact", head: true }),
-    supabase.from("maintenance_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("maintenance_requests").select("*", { count: "exact", head: true }).eq("status", "completed"),
-    supabase.from("teams").select("*", { count: "exact", head: true }),
+  const [{ data: equipment }, { data: requests }, { data: profiles }] = await Promise.all([
+    supabase.from("equipment").select("*"),
+    supabase
+      .from("maintenance_requests")
+      .select(`
+      *,
+      equipment:equipment_id(equipment_name),
+      assigned_technician:assigned_technician_id(full_name),
+      created_by:created_by_id(full_name),
+      maintenance_team:maintenance_team_id(name)
+    `)
+      .order("created_at", { ascending: false })
+      .limit(10),
+    supabase.from("profiles").select("*"),
   ])
 
-  // Fetch recent requests
-  const { data: recentRequests } = await supabase
-    .from("maintenance_requests")
-    .select(
-      `
-      *,
-      equipment:equipment_id(name),
-      requested_by:profiles!maintenance_requests_requested_by_fkey(full_name)
-    `,
-    )
-    .order("created_at", { ascending: false })
-    .limit(5)
+  // Critical Equipment (Health < 30%)
+  const criticalEquipment = equipment?.filter((e) => e.health_percentage < 30).length || 0
 
-  // Fetch equipment by status
-  const { data: equipmentByStatus } = await supabase.from("equipment").select("status")
+  // Technician Load (assuming 8 hour workday per technician)
+  const totalTechnicians = profiles?.length || 1
+  const totalHoursScheduled = requests?.reduce((sum, r) => sum + (r.duration_hours || 0), 0) || 0
+  const technicianUtilization = Math.min(Math.round((totalHoursScheduled / (totalTechnicians * 8)) * 100), 100)
 
-  const equipmentStats = equipmentByStatus?.reduce(
-    (acc, item) => {
-      acc[item.status] = (acc[item.status] || 0) + 1
-      return acc
-    },
-    {} as Record<string, number>,
-  )
+  // Open Requests (pending + in progress) and overdue
+  const openRequests = requests?.filter((r) => r.stage === "new" || r.stage === "in_progress").length || 0
+  const overdueRequests = requests?.filter((r) => r.is_overdue).length || 0
 
-  const stats = [
-    {
-      name: "Total Equipment",
-      value: equipmentCount.count || 0,
-      icon: Wrench,
-      color: "text-blue-600",
-      bgColor: "bg-blue-50",
-    },
-    {
-      name: "Active Requests",
-      value: requestsCount.count || 0,
-      icon: ClipboardList,
-      color: "text-purple-600",
-      bgColor: "bg-purple-50",
-    },
-    {
-      name: "Pending",
-      value: pendingCount.count || 0,
-      icon: AlertTriangle,
-      color: "text-orange-600",
-      bgColor: "bg-orange-50",
-    },
-    {
-      name: "Completed",
-      value: completedCount.count || 0,
-      icon: CheckCircle,
-      color: "text-green-600",
-      bgColor: "bg-green-50",
-    },
-  ]
-
-  const priorityColors = {
-    low: "bg-blue-100 text-blue-800",
-    medium: "bg-yellow-100 text-yellow-800",
-    high: "bg-orange-100 text-orange-800",
-    critical: "bg-red-100 text-red-800",
+  const stageColors = {
+    new: "bg-blue-100 text-blue-800 border-blue-200",
+    in_progress: "bg-yellow-100 text-yellow-800 border-yellow-200",
+    repaired: "bg-green-100 text-green-800 border-green-200",
+    scrap: "bg-gray-100 text-gray-800 border-gray-200",
   }
 
-  const statusColors = {
-    pending: "bg-yellow-100 text-yellow-800",
-    "in-progress": "bg-blue-100 text-blue-800",
-    completed: "bg-green-100 text-green-800",
-    cancelled: "bg-gray-100 text-gray-800",
+  const stageLabels = {
+    new: "New Request",
+    in_progress: "In Progress",
+    repaired: "Repaired",
+    scrap: "Scrap",
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
+    <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back! Here's an overview of your maintenance operations.</p>
+        <Link href="/dashboard/maintenance/new">
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            New
+          </Button>
+        </Link>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.name}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">{stat.name}</p>
-                  <p className="mt-2 text-3xl font-bold">{stat.value}</p>
-                </div>
-                <div className={`rounded-full p-3 ${stat.bgColor}`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="flex justify-center">
+        <div className="grid grid-cols-3 gap-6">
+          {/* Critical Equipment (Red) */}
+          <div className="w-64 rounded-lg border-2 border-red-200 bg-red-50 p-6 text-center">
+            <p className="text-2xl font-bold text-red-900">{criticalEquipment} Units</p>
+            <p className="mt-1 text-sm font-medium text-red-700">Critical Equipment</p>
+            <p className="mt-1 text-xs text-red-600">Health &lt; 30%</p>
+          </div>
+
+          {/* Technician Load (Blue) */}
+          <div className="w-64 rounded-lg border-2 border-blue-200 bg-blue-50 p-6 text-center">
+            <p className="text-2xl font-bold text-blue-900">{technicianUtilization}% Utilized</p>
+            <p className="mt-1 text-sm font-medium text-blue-700">Technician Load</p>
+            <p className="mt-1 text-xs text-blue-600">Assign Carefully</p>
+          </div>
+
+          {/* Open Requests (Green) */}
+          <div className="w-64 rounded-lg border-2 border-green-200 bg-green-50 p-6 text-center">
+            <p className="text-2xl font-bold text-green-900">{openRequests} Pending</p>
+            <p className="mt-1 text-sm font-medium text-green-700">Open Requests</p>
+            <p className="mt-1 text-xs text-green-600">{overdueRequests} Overdue</p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Requests */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Maintenance Requests</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentRequests && recentRequests.length > 0 ? (
-                recentRequests.map((request) => (
-                  <div
-                    key={request.id}
-                    className="flex items-start justify-between border-b pb-4 last:border-0 last:pb-0"
-                  >
-                    <div className="space-y-1">
-                      <p className="font-medium leading-none">{request.title}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {request.equipment?.name || "No equipment"} • {request.requested_by?.full_name || "Unknown"}
-                      </p>
-                      <div className="flex gap-2 pt-1">
-                        <Badge
-                          variant="outline"
-                          className={priorityColors[request.priority as keyof typeof priorityColors]}
-                        >
-                          {request.priority}
-                        </Badge>
-                        <Badge variant="outline" className={statusColors[request.status as keyof typeof statusColors]}>
-                          {request.status}
-                        </Badge>
-                      </div>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(request.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">No maintenance requests yet.</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Equipment Status */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Equipment Status Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-green-500" />
-                  <span className="text-sm font-medium">Operational</span>
-                </div>
-                <span className="text-2xl font-bold">{equipmentStats?.operational || 0}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-yellow-500" />
-                  <span className="text-sm font-medium">Under Maintenance</span>
-                </div>
-                <span className="text-2xl font-bold">{equipmentStats?.maintenance || 0}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-red-500" />
-                  <span className="text-sm font-medium">Faulty</span>
-                </div>
-                <span className="text-2xl font-bold">{equipmentStats?.faulty || 0}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-gray-500" />
-                  <span className="text-sm font-medium">Retired</span>
-                </div>
-                <span className="text-2xl font-bold">{equipmentStats?.retired || 0}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="rounded-lg border bg-white">
+        <table className="w-full">
+          <thead className="border-b bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Subject</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Employee</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Technician</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Category</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Stage</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Company</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {requests && requests.length > 0 ? (
+              requests.map((request) => (
+                <tr key={request.id} className="cursor-pointer hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm">
+                    <Link href={`/dashboard/maintenance/${request.id}`} className="hover:underline">
+                      {request.subject}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{request.created_by?.full_name || "—"}</td>
+                  <td className="px-4 py-3 text-sm">{request.assigned_technician?.full_name || "Unassigned"}</td>
+                  <td className="px-4 py-3 text-sm">{request.category || "—"}</td>
+                  <td className="px-4 py-3">
+                    <Badge variant="outline" className={stageColors[request.stage as keyof typeof stageColors]}>
+                      {stageLabels[request.stage as keyof typeof stageLabels]}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{request.company}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  No maintenance requests found. Click "New" to create your first request.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   )
