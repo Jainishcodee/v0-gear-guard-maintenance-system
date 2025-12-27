@@ -13,46 +13,51 @@ export default async function DashboardPage() {
       .from("maintenance_requests")
       .select(`
       *,
-      equipment:equipment_id(equipment_name),
-      assigned_technician:profiles!maintenance_requests_assigned_technician_id_fkey(full_name),
-      created_by:profiles!maintenance_requests_created_by_id_fkey(full_name),
-      maintenance_team:maintenance_teams(name)
+      equipment:equipment_id(name),
+      assigned_technician:profiles!maintenance_requests_assigned_to_fkey(full_name),
+      requested_by_profile:profiles!maintenance_requests_requested_by_fkey(full_name),
+      assigned_team_info:teams!maintenance_requests_assigned_team_fkey(name)
     `)
       .order("created_at", { ascending: false })
       .limit(10),
     supabase.from("profiles").select("*"),
   ])
 
-  // Critical Equipment (Health < 30%)
-  const criticalEquipment = equipment?.filter((e) => e.health_percentage < 30).length || 0
+  // Critical Equipment (status = 'critical' or needs_maintenance)
+  const criticalEquipment =
+    equipment?.filter((e) => e.status === "needs_maintenance" || e.status === "critical").length || 0
 
   // Technician Load (assuming 8 hour workday per technician)
   const totalTechnicians = profiles?.length || 1
-  const totalHoursScheduled = requests?.reduce((sum, r) => sum + (r.duration_hours || 0), 0) || 0
+  const totalHoursScheduled = requests?.reduce((sum, r) => sum + (r.estimated_hours || 0), 0) || 0
   const technicianUtilization = Math.min(Math.round((totalHoursScheduled / (totalTechnicians * 8)) * 100), 100)
 
   // Open Requests (pending + in progress) and overdue
-  const openRequests = requests?.filter((r) => r.stage === "new" || r.stage === "in_progress").length || 0
-  const overdueRequests = requests?.filter((r) => r.is_overdue).length || 0
+  const openRequests = requests?.filter((r) => r.status === "pending" || r.status === "in_progress").length || 0
+  const overdueRequests =
+    requests?.filter((r) => {
+      if (!r.scheduled_date) return false
+      return new Date(r.scheduled_date) < new Date() && r.status !== "completed"
+    }).length || 0
 
-  const stageColors = {
-    new: "bg-blue-100 text-blue-800 border-blue-200",
+  const statusColors = {
+    pending: "bg-blue-100 text-blue-800 border-blue-200",
     in_progress: "bg-yellow-100 text-yellow-800 border-yellow-200",
-    repaired: "bg-green-100 text-green-800 border-green-200",
-    scrap: "bg-gray-100 text-gray-800 border-gray-200",
+    completed: "bg-green-100 text-green-800 border-green-200",
+    cancelled: "bg-gray-100 text-gray-800 border-gray-200",
   }
 
-  const stageLabels = {
-    new: "New Request",
+  const statusLabels = {
+    pending: "Pending",
     in_progress: "In Progress",
-    repaired: "Repaired",
-    scrap: "Scrap",
+    completed: "Completed",
+    cancelled: "Cancelled",
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/dashboard/maintenance/new">
+        <Link href="/dashboard/requests/new">
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
             New
@@ -66,7 +71,7 @@ export default async function DashboardPage() {
           <div className="w-64 rounded-lg border-2 border-red-200 bg-red-50 p-6 text-center">
             <p className="text-2xl font-bold text-red-900">{criticalEquipment} Units</p>
             <p className="mt-1 text-sm font-medium text-red-700">Critical Equipment</p>
-            <p className="mt-1 text-xs text-red-600">Health &lt; 30%</p>
+            <p className="mt-1 text-xs text-red-600">Needs Maintenance</p>
           </div>
 
           {/* Technician Load (Blue) */}
@@ -92,9 +97,9 @@ export default async function DashboardPage() {
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Subject</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Employee</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Technician</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Category</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Stage</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Company</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Priority</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Equipment</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -102,19 +107,31 @@ export default async function DashboardPage() {
               requests.map((request) => (
                 <tr key={request.id} className="cursor-pointer hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm">
-                    <Link href={`/dashboard/maintenance/${request.id}`} className="hover:underline">
-                      {request.subject}
+                    <Link href={`/dashboard/requests/${request.id}`} className="hover:underline">
+                      {request.title}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-sm">{request.created_by?.full_name || "—"}</td>
+                  <td className="px-4 py-3 text-sm">{request.requested_by_profile?.full_name || "—"}</td>
                   <td className="px-4 py-3 text-sm">{request.assigned_technician?.full_name || "Unassigned"}</td>
-                  <td className="px-4 py-3 text-sm">{request.category || "—"}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                        request.priority === "high"
+                          ? "bg-red-100 text-red-700"
+                          : request.priority === "medium"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-green-100 text-green-700"
+                      }`}
+                    >
+                      {request.priority || "low"}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
-                    <Badge variant="outline" className={stageColors[request.stage as keyof typeof stageColors]}>
-                      {stageLabels[request.stage as keyof typeof stageLabels]}
+                    <Badge variant="outline" className={statusColors[request.status as keyof typeof statusColors]}>
+                      {statusLabels[request.status as keyof typeof statusLabels] || request.status}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-sm">{request.company}</td>
+                  <td className="px-4 py-3 text-sm">{request.equipment?.name || "—"}</td>
                 </tr>
               ))
             ) : (
